@@ -1,0 +1,17 @@
+[Base]
+sysbench_path = "/usr/bin/"
+sysbench_senario_dir = "/usr/share/sysbench/"
+
+[Target]
+host = "127.0.0.1"
+user = "sysbench"
+port = 33061
+password = "sysbench"
+database = "sysbench"
+
+[Backend]
+host = "127.0.0.1"
+user = "smt"
+port = 33062
+password = "smt"
+database = "smt"
