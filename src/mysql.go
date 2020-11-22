@@ -90,7 +90,7 @@ func connectTargetMySQL() (*gorm.DB, error) {
 func getQueuedSenarios() ([]Senario, error) {
 	s := []Senario{}
 
-	bdb.Raw("SELECT * FROM senario WHERE status like 'QUEUED' ORDER BY id DESC").Scan(&s)
+	bdb.Raw("SELECT * FROM senario WHERE status like 'QUEUED' ORDER BY id").Scan(&s)
 	if len(s) == 0 {
 		return nil, RecordNotFound
 	}
