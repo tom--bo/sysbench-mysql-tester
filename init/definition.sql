@@ -1,44 +1,23 @@
 CREATE TABLE IF NOT EXISTS senario (
 	id INT AUTO_INCREMENT NOT NULL,
 	sysbench_senario VARCHAR(30),
-	table_num INT,
-	table_size INT,
-	thread_num INT,
-	time_second INT,
-	count INT,
-	before_senario_command INT,
-    after_prepare_command INT,
-    after_senario_command INT,
-	status ENUM('QUEUED', 'SKIPPED', 'COMPLETED') default 'QUEUED',
-	PRIMARY KEY(id)
-);
-
-CREATE TABLE IF NOT EXISTS variables (
-  id INT AUTO_INCREMENT NOT NULL,
-  name VARCHAR(100),
-  PRIMARY KEY(id),
-  KEY(name)
-);
-
-CREATE TABLE IF NOT EXISTS commands (
-  id INT AUTO_INCREMENT NOT NULL,
-  command_text TEXT,
-  lavel ENUM('BEFORE_SENARIO', 'AFTER_PREPARE', 'AFRTER_SENARIO'),
-  PRIMARY KEY(id)
-);
-
-CREATE TABLE IF NOT EXISTS senario_variables (
-  id INT AUTO_INCREMENT NOT NULL,
-  senario_id INT,
-  variable_id INT,
-  value VARCHAR(1000),
-  PRIMARY KEY(id),
-  UNIQUE KEY(senario_id, variable_id)
+	table_num INT UNSIGNED NOT NULL,
+	table_size INT UNSIGNED NOT NULL,
+	thread_num INT UNSIGNED NOT NULL,
+	time_second INT UNSIGNED NOT NULL,
+	mycnf_id INT UNSIGNED NOT NULL,
+	exp_count INT UNSIGNED NOT NULL,
+	status ENUM('QUEUED', 'RUNNING', 'SKIPPED', 'ERROR','COMPLETED') default 'QUEUED',
+	message VARCHAR(100) NOT NULL,
+	created_at DATETIME NOT NULL DEFAULT current_timestamp,
+	updated_at DATETIME NOT NULL DEFAULT current_timestamp ON UPDATE current_timestamp,
+	PRIMARY KEY(id),
+	key(status)
 );
 
 CREATE TABLE IF NOT EXISTS results (
 	id INT AUTO_INCREMENT NOT NULL,
-	senario_id INT,
+	senario_id INT UNSIGNED,
 	senario_count INT,
 	sysbench_version VARCHAR(20),
 	luajit_version VARCHAR(20),
@@ -67,4 +46,3 @@ CREATE TABLE IF NOT EXISTS results (
 	PRIMARY KEY(id),
 	KEY(senario_id)
 );
-

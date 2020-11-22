@@ -15,3 +15,8 @@ user = "smt"
 port = 33062
 password = "smt"
 database = "smt"
+
+[Scp]
+user = "root"
+password = "password"
+path = "/etc/mysql/my.cnf"

@@ -1,3 +1,7 @@
 .idea
 tmp/*.cnf
 go.sum
+files
+smt.cnf
+my_*.cnf
+!my_0000.cnf

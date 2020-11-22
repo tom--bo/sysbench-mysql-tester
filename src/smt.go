@@ -2,83 +2,77 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 
 	smp "github.com/tom--bo/sm-parser"
 )
 
 func start() error {
-	// Get not completed senarios
 	senarios, err := getQueuedSenarios()
-
 	if err != nil {
 		if err == RecordNotFound {
 			fmt.Println("All senarios are completed!!")
 			return nil
+		} else {
+			return err
 		}
+	}
+
+	for _, s := range senarios {
+		fmt.Printf("[Notice] senario: %04d  ------\n", s.ID)
+		updateStatus(s.ID, RUNNING, "")
+
+		err = sendMycnf(s.MycnfId)
+		if err != nil {
+			updateStatus(s.ID, ERROR, "Send my.cnf: "+err.Error())
+			continue
+		}
+		recreateSchema()
+		restartMySQL()
+
+		err = prepareBenchmark(s)
+		if err != nil {
+			fmt.Println(err.Error())
+			updateStatus(s.ID, ERROR, "Prepare: "+err.Error())
+			continue
+		}
+
+		restartMySQL()
+		err = benchmark(s)
+		if err != nil {
+			fmt.Println(err.Error())
+			updateStatus(s.ID, ERROR, "Benchmark: "+err.Error())
+			continue
+		} else {
+			updateStatus(s.ID, COMPLETED, "")
+		}
+	}
+
+	return nil
+}
+
+func sendMycnf(mycnfId int64) error {
+	fileName := fmt.Sprintf("my_%04d.cnf", mycnfId)
+
+	srcPath := homeDir + "/mycnfs/" + fileName
+	dstPath := conf.Scp.User + "@" + conf.Target.Host + ":" + conf.Scp.Path
+	err := exec.Command("sshpass", "-p", conf.Scp.Password, "scp", srcPath, dstPath).Run()
+	if err != nil {
+		fmt.Println(err)
 		return err
 	}
 
-	// Start benchmark for senarios
-	for i, s := range senarios {
-		fmt.Printf("senario,%2d: \n", i)
-		fmt.Println(s)
-
-		err := beforeSenario(s)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		restartMySQL()
-
-		prepare(s)
-		afterPrepare(s)
-
-		restartMySQL()
-
-		bench(s)
-
-		err = afterSenario(s)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-	}
-
 	return nil
 }
 
-func beforeSenario(s Senario) error {
-	dropSchemaIfExists()
+func prepareBenchmark(s Senario) error {
+	fmt.Println("prepareBenchmark")
 
-	resetPersist()
+	time.Sleep(5 * time.Second)
 
-	c := getCommand(s.BeforeSenarioCommand)
-	cmds := strings.Split(c.CommandText, "\n")
-
-	for _, s := range cmds {
-		execSQL(s)
-	}
-
-	return nil
-}
-
-func prepare(s Senario) error {
-	createSchema()
-	prepareBench(s)
-
-	return nil
-}
-
-func prepareBench(s Senario) {
-	fmt.Println("prepareBench(s)")
 	out, err := exec.Command(conf.Base.SysbenchPath+"sysbench",
-		conf.Base.SysbenchSenarioDir + s.SysbenchSenario + ".lua",
 		"--db-driver=mysql",
 		"--table-size="+strconv.Itoa(int(s.TableSize)),
 		"--tables="+strconv.Itoa(int(s.TableNum)),
@@ -87,55 +81,32 @@ func prepareBench(s Senario) {
 		"--mysql-user="+conf.Target.User,
 		"--mysql-password="+conf.Target.Password,
 		"--mysql-db="+conf.Target.DB,
-		"prepare",
-	).Output()
-
+		s.SysbenchSenario,
+		"prepare").Output()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		fmt.Println(string(out))
+		return err
 	}
-
-	fmt.Println(string(out))
-}
-
-func afterPrepare(s Senario) error {
-	c := getCommand(s.AfterPrepareCommand)
-	cmds := strings.Split(c.CommandText, "\n")
-
-	for _, s := range cmds {
-		execSQL(s)
-	}
-
-	setVariables(s)
 	return nil
 }
 
-func bench(s Senario) {
-	fmt.Println("------- bench")
-
-	cnt := getBenchCount(s)
-	fmt.Printf("Senario count for this senario: %d\n", cnt)
-	for i := cnt + 1; i <= int(s.Count); i++ {
-		fmt.Println("benchmark num i: ", i)
-
-		// start sysbench run
+func benchmark(s Senario) error {
+	fmt.Println("[debug] benchmark() ---")
+	for i := 1; i <= int(s.ExpCount); i++ {
 		err := run(i, s)
 		if err != nil {
-			fmt.Println(err)
-			fmt.Println("Something happen, Skip this senario!")
-			break
+			return err
 		}
 		// cool down
 		time.Sleep(120 * time.Second)
 	}
+	return nil
 }
 
 func run(i int, s Senario) error {
-	fmt.Println(s.ID, ": ", i)
-
-	// exec sysbench
+	fmt.Println("[debug] run() ---")
 	out, err := exec.Command(conf.Base.SysbenchPath+"sysbench",
-		conf.Base.SysbenchSenarioDir + s.SysbenchSenario + ".lua",
+		conf.Base.SysbenchSenarioDir+s.SysbenchSenario+".lua",
 		"--db-driver=mysql",
 		"--table-size="+strconv.Itoa(int(s.TableSize)),
 		"--tables="+strconv.Itoa(int(s.TableNum)),
@@ -148,13 +119,10 @@ func run(i int, s Senario) error {
 		"--time="+strconv.Itoa(int(s.TimeSecond)),
 		"run",
 	).Output()
-
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
-
-	fmt.Println(string(out))
+	// fmt.Println(string(out))
 
 	var r smp.Result
 	smp.ParseOutput(&r, string(out))
@@ -163,21 +131,6 @@ func run(i int, s Senario) error {
 	ret = mapResult(ret, r)
 	registerResult(ret) // if error happen, die
 
-	return nil
-}
-
-func afterSenario(s Senario) error {
-	err := updateStatus(s)
-	if err != nil {
-		return err
-	}
-
-	c := getCommand(s.AfterSenarioCommand)
-	cmds := strings.Split(c.CommandText, "\n")
-
-	for _, s := range cmds {
-		execSQL(s)
-	}
 	return nil
 }
 
