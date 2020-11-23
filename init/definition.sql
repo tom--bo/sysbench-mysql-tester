@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS senario (
 	mycnf_id INT UNSIGNED NOT NULL,
 	exp_count INT UNSIGNED NOT NULL,
 	status ENUM('QUEUED', 'RUNNING', 'SKIPPED', 'ERROR','COMPLETED') default 'QUEUED',
-	message VARCHAR(100) NOT NULL,
+	message VARCHAR(100) NOT NULL default '',
 	created_at DATETIME NOT NULL DEFAULT current_timestamp,
 	updated_at DATETIME NOT NULL DEFAULT current_timestamp ON UPDATE current_timestamp,
 	PRIMARY KEY(id),

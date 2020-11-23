@@ -137,6 +137,23 @@ func restartMySQL() error {
 	return nil
 }
 
+func innodb_redo_log(b bool) error {
+	tdb, err := connectTargetMySQL()
+	if err != nil {
+		return err
+	}
+	defer tdb.Close()
+
+	str := "disable"
+	if b {
+		str = "enable"
+	}
+
+	// drop db if exists
+	tdb.Exec("ALTER INSTANCE " + str + " INNODB REDO_LOG;")
+	return nil
+}
+
 // create DB
 func recreateSchema() error {
 	tdb, err := connectTargetMySQL()
