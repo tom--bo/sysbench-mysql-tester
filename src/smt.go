@@ -66,7 +66,7 @@ func start() error {
 
 func sendTmpMycnf(mycnfId int64) error {
 	origName := fmt.Sprintf("my_%04d.cnf", mycnfId)
-	fileName := fmt.Sprintf("my_tmp.cnf", mycnfId)
+	fileName := "my_tmp.cnf"
 	base := homeDir + "/mycnfs/"
 
 	logoffs := []string{
