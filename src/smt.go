@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"time"
@@ -24,11 +25,14 @@ func start() error {
 		fmt.Printf("[Notice] senario: %04d  ------\n", s.ID)
 		updateStatus(s.ID, RUNNING, "")
 
-		err = sendMycnf(s.MycnfId)
+		// send cnf with logs off
+		err = sendTmpMycnf(s.MycnfId)
 		if err != nil {
 			updateStatus(s.ID, ERROR, "Send my.cnf: "+err.Error())
 			continue
 		}
+		// disable redo-log
+		innodb_redo_log(false)
 		recreateSchema()
 		restartMySQL()
 
@@ -39,6 +43,13 @@ func start() error {
 			continue
 		}
 
+		err = sendMycnf(s.MycnfId)
+		if err != nil {
+			updateStatus(s.ID, ERROR, "Send my.cnf: "+err.Error())
+			continue
+		}
+		// enable redo-log
+		innodb_redo_log(true)
 		restartMySQL()
 		err = benchmark(s)
 		if err != nil {
@@ -48,6 +59,53 @@ func start() error {
 		} else {
 			updateStatus(s.ID, COMPLETED, "")
 		}
+	}
+
+	return nil
+}
+
+func sendTmpMycnf(mycnfId int64) error {
+	origName := fmt.Sprintf("my_%04d.cnf", mycnfId)
+	fileName := "my_tmp.cnf"
+	base := homeDir + "/mycnfs/"
+
+	logoffs := []string{
+		"## temporal variables to logs off\n",
+		"disable_log_bin\n",
+		"slow_query_log = off\n",
+		"general_log = off\n",
+		"innodb_doublewrite = off\n",
+		"innodb_flush_log_at_trx_commit = 2\n",
+	}
+
+	// make tmp cnf from original my_xxxx.cnf
+	err := exec.Command("cp", base+origName, base+fileName).Run()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	// add log off variables
+
+	f, err := os.OpenFile(base+fileName, os.O_APPEND|os.O_WRONLY, 755)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	defer f.Close()
+	for _, val := range logoffs {
+		if _, err := f.Write([]byte(val)); err != nil {
+			fmt.Println(err.Error())
+			return err
+		}
+	}
+
+	// send
+	srcPath := homeDir + "/mycnfs/" + fileName
+	dstPath := conf.Scp.User + "@" + conf.Target.Host + ":" + conf.Scp.Path
+	err = exec.Command("sshpass", "-p", conf.Scp.Password, "scp", srcPath, dstPath).Run()
+	if err != nil {
+		fmt.Println(err)
+		return err
 	}
 
 	return nil
